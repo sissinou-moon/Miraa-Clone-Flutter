@@ -6,6 +6,7 @@ import 'package:video_player/video_player.dart';
 
 import '../models/media_item.dart';
 import '../models/subtitle_item.dart';
+import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../utils/app_theme.dart';
 import '../widgets/active_subtitle_card.dart';
@@ -13,8 +14,8 @@ import '../widgets/bottom_player_controls.dart';
 import '../widgets/explanation_sheet.dart';
 import '../widgets/shadowing_practice_sheet.dart';
 import '../widgets/subtitle_list_view.dart';
-import '../widgets/video_player_widget.dart';
 import '../widgets/video_explanation_sheet.dart';
+import '../widgets/video_player_widget.dart';
 
 class PlayerScreen extends StatefulWidget {
   final MediaItem mediaItem;
@@ -41,11 +42,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Duration _currentPosition = Duration.zero;
   Duration _totalDuration = Duration.zero;
 
+  bool _isGeneratingExplanation = false;
+  final ValueNotifier<String> _explanationNotifier = ValueNotifier<String>('');
+
   @override
   void initState() {
     super.initState();
     _item = widget.mediaItem;
     _initVideo();
+    _checkAndFetchVideoExplanation();
   }
 
   Future<void> _initVideo() async {
@@ -129,6 +134,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   void dispose() {
+    _explanationNotifier.dispose();
     _controller.removeListener(_videoListener);
     _controller.dispose();
     super.dispose();
@@ -259,8 +265,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) =>
-          ExplanationSheet(subtitle: currentSub, focusedWord: focusedWord),
+      builder: (ctx) => ExplanationSheet(
+        subtitle: currentSub,
+        focusedWord: focusedWord,
+        language: _item.language,
+      ),
     );
   }
 
@@ -285,13 +294,104 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  Future<void> _checkAndFetchVideoExplanation() async {
+    // If already exists in mediaItem, initialize notifier
+    if (_item.videoExplanation != null && _item.videoExplanation!.isNotEmpty) {
+      _explanationNotifier.value = _item.videoExplanation!;
+      return;
+    }
+
+    // Check if saved in offline file next to subtitles
+    if (_item.localSubtitlePath.isNotEmpty) {
+      final expFile = File(
+        _item.localSubtitlePath.replaceAll('.json', '_explanation.txt'),
+      );
+      if (await expFile.exists()) {
+        try {
+          final content = await expFile.readAsString();
+          if (content.isNotEmpty) {
+            if (mounted) {
+              setState(() {
+                _item = _item.copyWith(videoExplanation: content);
+              });
+            }
+            _explanationNotifier.value = content;
+            await widget.storageService.saveMediaItem(_item);
+            return;
+          }
+        } catch (_) {}
+      }
+    }
+
+    // If no subtitles, return
+    if (_item.subtitles.isEmpty) return;
+
+    // Otherwise first time opening! Fetch explanation in background
+    _startFetchingVideoExplanation();
+  }
+
+  Future<void> _startFetchingVideoExplanation() async {
+    if (_isGeneratingExplanation) return;
+
+    if (mounted) {
+      setState(() {
+        _isGeneratingExplanation = true;
+      });
+    }
+
+    final wholeSubtitles = _item.subtitles
+        .map((s) => s.text.trim())
+        .where((t) => t.isNotEmpty)
+        .join(' ');
+
+    final StringBuffer accumulated = StringBuffer();
+
+    try {
+      final stream = ApiService().chatWithVideo(
+        wholeSubtitles,
+        [],
+        language: _item.language,
+      );
+
+      await for (final token in stream) {
+        accumulated.write(token);
+        _explanationNotifier.value = accumulated.toString();
+      }
+
+      final completeText = accumulated.toString();
+      if (completeText.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _item = _item.copyWith(videoExplanation: completeText);
+            _isGeneratingExplanation = false;
+          });
+        }
+        await widget.storageService.saveMediaItem(_item);
+      }
+    } catch (e) {
+      debugPrint('Error generating video explanation: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGeneratingExplanation = false;
+        });
+      }
+    }
+  }
+
   void _openVideoExplanation() {
     _controller.pause();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => VideoExplanationSheet(subtitles: _item.subtitles),
+      builder: (ctx) => VideoExplanationSheet(
+        mediaItem: _item,
+        initialExplanation: _item.videoExplanation,
+        isGenerating: _isGeneratingExplanation,
+        streamingNotifier: _explanationNotifier,
+        onRetry: _startFetchingVideoExplanation,
+      ),
     );
   }
 
@@ -343,13 +443,31 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 ),
                               ),
                             ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.chat_bubble_rounded,
-                                color: AppTheme.primaryGreen,
-                              ),
-                              tooltip: 'Explain Video',
-                              onPressed: _openVideoExplanation,
+                            Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.chat_bubble_rounded,
+                                    color: AppTheme.primaryGreen,
+                                  ),
+                                  tooltip: 'Video Explanation',
+                                  onPressed: _openVideoExplanation,
+                                ),
+                                if (_isGeneratingExplanation)
+                                  Positioned(
+                                    top: 8,
+                                    right: 8,
+                                    child: Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFFF59E0B),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ],
                         ),

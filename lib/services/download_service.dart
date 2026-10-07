@@ -15,6 +15,7 @@ class DownloadService {
   Future<MediaItem> processAndSaveVideo({
     required String youtubeUrl,
     required List<SubtitleItem> subtitles,
+    String language = 'ru',
     DownloadProgressCallback? onProgress,
   }) async {
     final yt = YoutubeExplode();
@@ -120,6 +121,7 @@ class DownloadService {
         durationSeconds: video.duration?.inSeconds ?? 0,
         createdAt: DateTime.now(),
         subtitles: subtitles,
+        language: language,
       );
     } finally {
       yt.close();
@@ -127,7 +129,10 @@ class DownloadService {
   }
 
   /// Helper to create a saved sample offline item (useful for previewing or testing without network)
-  Future<MediaItem> createSampleOfflineItem(List<SubtitleItem> sampleSubtitles) async {
+  Future<MediaItem> createSampleOfflineItem(
+    List<SubtitleItem> sampleSubtitles, {
+    String language = 'ru',
+  }) async {
     final appDir = await getApplicationDocumentsDirectory();
     final subtitlesDir = Directory('${appDir.path}/miraa_offline/subtitles');
     if (!await subtitlesDir.exists()) await subtitlesDir.create(recursive: true);
@@ -151,6 +156,7 @@ class DownloadService {
       durationSeconds: 139,
       createdAt: DateTime.now(),
       subtitles: sampleSubtitles,
+      language: language,
     );
   }
 }

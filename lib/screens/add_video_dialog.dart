@@ -32,6 +32,7 @@ class _AddVideoDialogState extends State<AddVideoDialog> {
   String _statusMessage = '';
   String? _errorMessage;
   bool _showSettings = false;
+  String _selectedLanguage = 'ru';
 
   // The sample Russian conversation data provided in the user prompt
   static const List<Map<String, dynamic>> _sampleSubtitlesJson = [
@@ -119,11 +120,12 @@ class _AddVideoDialogState extends State<AddVideoDialog> {
       final customBase = _serverController.text.trim();
       await widget.storageService.saveServerUrl(customBase);
 
-      // 1. Call endpoint: POST /translate with {"url": url}
+      // 1. Call endpoint: POST /translate with {"url": url, "language": _selectedLanguage}
       List<SubtitleItem> subtitles;
       try {
         subtitles = await widget.apiService.fetchSubtitles(
           url,
+          language: _selectedLanguage,
           customBaseUrl: customBase,
         );
       } catch (apiErr) {
@@ -145,6 +147,7 @@ class _AddVideoDialogState extends State<AddVideoDialog> {
       final MediaItem mediaItem = await widget.downloadService.processAndSaveVideo(
         youtubeUrl: url,
         subtitles: subtitles,
+        language: _selectedLanguage,
         onProgress: (prog, msg) {
           if (mounted) {
             setState(() {
@@ -181,7 +184,10 @@ class _AddVideoDialogState extends State<AddVideoDialog> {
 
     try {
       final sampleSubs = _sampleSubtitlesJson.map((e) => SubtitleItem.fromJson(e)).toList();
-      final MediaItem sampleItem = await widget.downloadService.createSampleOfflineItem(sampleSubs);
+      final MediaItem sampleItem = await widget.downloadService.createSampleOfflineItem(
+        sampleSubs,
+        language: _selectedLanguage,
+      );
       await widget.storageService.saveMediaItem(sampleItem);
 
       if (mounted) {
@@ -284,6 +290,74 @@ class _AddVideoDialogState extends State<AddVideoDialog> {
                       onPressed: _isLoading ? null : _pasteFromClipboard,
                     ),
                   ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Language selector dropdown
+              Text(
+                'Video Language',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textDark,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.cardCream,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppTheme.cardCreamBorder),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedLanguage,
+                    isExpanded: true,
+                    icon: const Icon(
+                      Icons.arrow_drop_down_rounded,
+                      color: AppTheme.primaryGreen,
+                      size: 28,
+                    ),
+                    dropdownColor: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.textDark,
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'ru',
+                        child: Row(
+                          children: [
+                            Icon(Icons.language_rounded, size: 18, color: AppTheme.primaryGreen),
+                            SizedBox(width: 10),
+                            Text('Russian'),
+                          ],
+                        ),
+                      ),
+                      DropdownMenuItem(
+                        value: 'en',
+                        child: Row(
+                          children: [
+                            Icon(Icons.language_rounded, size: 18, color: AppTheme.primaryGreen),
+                            SizedBox(width: 10),
+                            Text('English'),
+                          ],
+                        ),
+                      ),
+                    ],
+                    onChanged: _isLoading
+                        ? null
+                        : (val) {
+                            if (val != null) {
+                              setState(() => _selectedLanguage = val);
+                            }
+                          },
+                  ),
                 ),
               ),
 

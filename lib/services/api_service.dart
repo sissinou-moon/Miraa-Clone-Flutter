@@ -55,6 +55,7 @@ class ApiService {
   /// Fetches bilingual subtitles for a YouTube URL from the FastAPI translation backend.
   Future<List<SubtitleItem>> fetchSubtitles(
     String youtubeUrl, {
+    String language = 'ru',
     String? customBaseUrl,
   }) async {
     final String baseUrl = await resolveBaseUrl(customBaseUrl: customBaseUrl);
@@ -62,18 +63,18 @@ class ApiService {
 
     final Uri uri = Uri.parse('$baseUrl/translate');
 
-    debugPrint('Requesting subtitles from: $uri for $youtubeUrl');
+    debugPrint(
+      'Requesting subtitles from: $uri for $youtubeUrl (language: $language)',
+    );
 
     print("TOKEN : $token");
 
     try {
-      final response = await _client
-          .post(
-            uri,
-            headers: {'Content-Type': 'application/json', 'sign': token},
-            body: jsonEncode({'url': youtubeUrl}),
-          )
-          .timeout(const Duration(seconds: 45));
+      final response = await _client.post(
+        uri,
+        headers: {'Content-Type': 'application/json', 'sign': token},
+        body: jsonEncode({'url': youtubeUrl, 'language': language}),
+      );
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
@@ -102,7 +103,11 @@ class ApiService {
           baseUrl.contains('localhost')) {
         final fallbackUrl = baseUrl.replaceAll('localhost', '10.0.2.2');
         debugPrint('Retrying with Android emulator fallback: $fallbackUrl');
-        return fetchSubtitles(youtubeUrl, customBaseUrl: fallbackUrl);
+        return fetchSubtitles(
+          youtubeUrl,
+          language: language,
+          customBaseUrl: fallbackUrl,
+        );
       }
       rethrow;
     }
@@ -124,14 +129,23 @@ class ApiService {
   /// Calls the model endpoint for A1 level sentence explanation
   Stream<String> explainSentence(
     String sentence, {
+    String language = 'ru',
     String? customBaseUrl,
   }) async* {
     final String baseUrl = await resolveBaseUrl(customBaseUrl: customBaseUrl);
+    final String learningLanguage =
+        (language == 'ru' || language.toLowerCase() == 'russian')
+            ? 'Russian'
+            : 'English';
 
     try {
       final request = http.Request('POST', Uri.parse('$baseUrl/model'));
       request.headers['Content-Type'] = 'application/json';
-      request.body = jsonEncode({"text": sentence, "history": []});
+      request.body = jsonEncode({
+        "text": sentence,
+        "learning_language": learningLanguage,
+        "history": [],
+      });
 
       final response = await _client.send(request);
       if (response.statusCode != 200) {
@@ -157,7 +171,11 @@ class ApiService {
       if (defaultTargetPlatform == TargetPlatform.android &&
           baseUrl.contains('localhost')) {
         final fallbackUrl = baseUrl.replaceAll('localhost', '10.0.2.2');
-        yield* explainSentence(sentence, customBaseUrl: fallbackUrl);
+        yield* explainSentence(
+          sentence,
+          language: language,
+          customBaseUrl: fallbackUrl,
+        );
       } else {
         rethrow;
       }
@@ -168,9 +186,14 @@ class ApiService {
   Stream<String> chatWithVideo(
     String prompt,
     List<Map<String, dynamic>> history, {
+    String language = 'ru',
     String? customBaseUrl,
   }) async* {
     final String baseUrl = await resolveBaseUrl(customBaseUrl: customBaseUrl);
+    final String learningLanguage =
+        (language == 'ru' || language.toLowerCase() == 'russian')
+            ? 'Russian'
+            : 'English';
 
     try {
       final request = http.Request(
@@ -178,7 +201,11 @@ class ApiService {
         Uri.parse('$baseUrl/model/video-explanation'),
       );
       request.headers['Content-Type'] = 'application/json';
-      request.body = jsonEncode({"text": prompt, "history": history});
+      request.body = jsonEncode({
+        "text": prompt,
+        "learning_language": learningLanguage,
+        "history": history,
+      });
 
       final response = await _client.send(request);
       if (response.statusCode != 200) {
@@ -204,7 +231,12 @@ class ApiService {
       if (defaultTargetPlatform == TargetPlatform.android &&
           baseUrl.contains('localhost')) {
         final fallbackUrl = baseUrl.replaceAll('localhost', '10.0.2.2');
-        yield* chatWithVideo(prompt, history, customBaseUrl: fallbackUrl);
+        yield* chatWithVideo(
+          prompt,
+          history,
+          language: language,
+          customBaseUrl: fallbackUrl,
+        );
       } else {
         rethrow;
       }
@@ -212,17 +244,25 @@ class ApiService {
   }
 
   /// Get TTS audio path
-  Future<String> getTtsAudioPath(String text, {String? customBaseUrl}) async {
+  Future<String> getTtsAudioPath(
+    String text, {
+    String language = 'ru',
+    String? customBaseUrl,
+  }) async {
     final String baseUrl = await resolveBaseUrl(customBaseUrl: customBaseUrl);
 
     try {
-      final response = await _client
-          .post(
-            Uri.parse('$baseUrl/russian-tts'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({"text": text, "speed": 1.0, "speaker": "xenia"}),
-          )
-          .timeout(const Duration(seconds: 15));
+      print("URL: $baseUrl/russian-tts");
+      final response = await _client.post(
+        Uri.parse('$baseUrl/russian-tts'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          "text": text,
+          "speed": 1.0,
+          "speaker": language == "en" ? "en_0" : "xenia",
+          "language": language,
+        }),
+      );
 
       if (response.statusCode == 200) {
         final dir = await getTemporaryDirectory();
@@ -238,7 +278,11 @@ class ApiService {
       if (defaultTargetPlatform == TargetPlatform.android &&
           baseUrl.contains('localhost')) {
         final fallbackUrl = baseUrl.replaceAll('localhost', '10.0.2.2');
-        return getTtsAudioPath(text, customBaseUrl: fallbackUrl);
+        return getTtsAudioPath(
+          text,
+          language: language,
+          customBaseUrl: fallbackUrl,
+        );
       }
       rethrow;
     }

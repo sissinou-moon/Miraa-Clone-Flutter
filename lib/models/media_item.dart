@@ -12,6 +12,8 @@ class MediaItem {
   final int durationSeconds;
   final DateTime createdAt;
   final List<SubtitleItem> subtitles;
+  final String language;
+  final String? videoExplanation;
 
   const MediaItem({
     required this.id,
@@ -24,6 +26,8 @@ class MediaItem {
     this.durationSeconds = 0,
     required this.createdAt,
     this.subtitles = const [],
+    this.language = 'ru',
+    this.videoExplanation,
   });
 
   Duration get duration => Duration(seconds: durationSeconds);
@@ -39,6 +43,8 @@ class MediaItem {
     int? durationSeconds,
     DateTime? createdAt,
     List<SubtitleItem>? subtitles,
+    String? language,
+    String? videoExplanation,
   }) {
     return MediaItem(
       id: id ?? this.id,
@@ -51,6 +57,8 @@ class MediaItem {
       durationSeconds: durationSeconds ?? this.durationSeconds,
       createdAt: createdAt ?? this.createdAt,
       subtitles: subtitles ?? this.subtitles,
+      language: language ?? this.language,
+      videoExplanation: videoExplanation ?? this.videoExplanation,
     );
   }
 
@@ -75,6 +83,8 @@ class MediaItem {
           ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
           : DateTime.now(),
       subtitles: subs,
+      language: json['language'] as String? ?? 'ru',
+      videoExplanation: json['videoExplanation'] as String?,
     );
   }
 
@@ -90,6 +100,8 @@ class MediaItem {
       'durationSeconds': durationSeconds,
       'createdAt': createdAt.toIso8601String(),
       'subtitles': subtitles.map((s) => s.toJson()).toList(),
+      'language': language,
+      'videoExplanation': videoExplanation,
     };
   }
 

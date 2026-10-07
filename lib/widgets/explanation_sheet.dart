@@ -11,11 +11,13 @@ import '../components/orbs/thinking_orb.dart';
 class ExplanationSheet extends StatefulWidget {
   final SubtitleItem subtitle;
   final String? focusedWord;
+  final String language;
 
   const ExplanationSheet({
     super.key,
     required this.subtitle,
     this.focusedWord,
+    this.language = 'ru',
   });
 
   @override
@@ -50,7 +52,10 @@ class _ExplanationSheetState extends State<ExplanationSheet> {
       _explanation = '';
     });
     try {
-      final stream = ApiService().explainSentence(widget.subtitle.text);
+      final stream = ApiService().explainSentence(
+        widget.subtitle.text,
+        language: widget.language,
+      );
       await for (final chunk in stream) {
         setState(() {
           if (_isLoading) _isLoading = false;
@@ -74,7 +79,7 @@ class _ExplanationSheetState extends State<ExplanationSheet> {
       } else {
         setState(() => _playingWord = text);
       }
-      final path = await ApiService().getTtsAudioPath(text);
+      final path = await ApiService().getTtsAudioPath(text, language: widget.language);
       await _audioPlayer.play(DeviceFileSource(path));
     } catch (e) {
       if (mounted) {

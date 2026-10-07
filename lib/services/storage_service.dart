@@ -25,6 +25,19 @@ class StorageService {
 
     final jsonList = items.map((i) => i.toJson()).toList();
     await prefs.setString(_itemsKey, jsonEncode(jsonList));
+
+    if (item.videoExplanation != null &&
+        item.videoExplanation!.isNotEmpty &&
+        item.localSubtitlePath.isNotEmpty) {
+      try {
+        final expFile = File(
+          item.localSubtitlePath.replaceAll('.json', '_explanation.txt'),
+        );
+        await expFile.writeAsString(item.videoExplanation!);
+      } catch (e) {
+        debugPrint('Error saving explanation file: $e');
+      }
+    }
   }
 
   /// Retrieves all saved media items from local storage
@@ -57,6 +70,18 @@ class StorageService {
                     )
                     .toList();
                 mediaItem = mediaItem.copyWith(subtitles: subs);
+              }
+            }
+            // If explanation was saved in file, load it if empty in item
+            if ((mediaItem.videoExplanation == null ||
+                    mediaItem.videoExplanation!.isEmpty) &&
+                mediaItem.localSubtitlePath.isNotEmpty) {
+              final expFile = File(
+                mediaItem.localSubtitlePath.replaceAll('.json', '_explanation.txt'),
+              );
+              if (await expFile.exists()) {
+                final expText = await expFile.readAsString();
+                mediaItem = mediaItem.copyWith(videoExplanation: expText);
               }
             }
             items.add(mediaItem);
@@ -93,6 +118,17 @@ class StorageService {
         if (await sFile.exists()) {
           try {
             await sFile.delete();
+          } catch (_) {}
+        }
+      }
+      // Remove explanation file
+      if (item.localSubtitlePath.isNotEmpty) {
+        final expFile = File(
+          item.localSubtitlePath.replaceAll('.json', '_explanation.txt'),
+        );
+        if (await expFile.exists()) {
+          try {
+            await expFile.delete();
           } catch (_) {}
         }
       }
